@@ -1,0 +1,922 @@
+{
+  "name": "RestaurantWorkfow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "42f57b0e-aff4-47c8-97d4-acf68e913206",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -112,
+        -192
+      ],
+      "id": "43e5cfbe-1205-4279-8887-1ecc63b69583",
+      "name": "Webhook",
+      "webhookId": "42f57b0e-aff4-47c8-97d4-acf68e913206"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json;\nconst input = raw.body ?? raw;\n\nconst cantidad = Number(input.cantidad || 1);\nconst plato = String(input.plato || '').toLowerCase().trim();\nconst id_comanda = input.id_comanda || `CMD-${Date.now()}`;\n\nif (plato === 'ensalada') {\n  return [\n    {\n      json: {\n        id_comanda,\n        plato: 'Ensalada',\n        cantidad,\n        ingredientes: [\n          { ingrediente: 'Lechuga', consumo: 1 * cantidad },\n          { ingrediente: 'Tomate', consumo: 2 * cantidad },\n          { ingrediente: 'Atun', consumo: 1 * cantidad }\n        ]\n      }\n    }\n  ];\n}\n\nif (plato === 'pasta con atun') {\n  return [\n    {\n      json: {\n        id_comanda,\n        plato: 'Pasta con Atun',\n        cantidad,\n        ingredientes: [\n          { ingrediente: 'Pasta', consumo: 1 * cantidad },\n          { ingrediente: 'Atun', consumo: 1 * cantidad }\n        ]\n      }\n    }\n  ];\n}\n\nthrow new Error(`Plato no soportado: ${input.plato}`);"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        32
+      ],
+      "id": "8977af05-a7e6-4696-95d0-d71bdd077ff9",
+      "name": "DefinirReceta"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\n\nreturn data.ingredientes.map(item => ({\n  json: {\n    id_comanda: data.id_comanda,\n    plato: data.plato,\n    cantidad: data.cantidad,\n    ingrediente: item.ingrediente,\n    consumo: item.consumo,\n    ventas_30d: data.ventas_30d ?? 0,\n    tendencia: data.tendencia ?? 'N/A'\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        32
+      ],
+      "id": "62ad5c0c-9088-47c8-9726-c2b34a0dc819",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appoqsi86cdnaDkgz",
+          "mode": "list",
+          "cachedResultName": "Restaurant Workflow",
+          "cachedResultUrl": "https://airtable.com/appoqsi86cdnaDkgz"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblQZmq4ekOKjz33E",
+          "mode": "list",
+          "cachedResultName": "Stock",
+          "cachedResultUrl": "https://airtable.com/appoqsi86cdnaDkgz/tblQZmq4ekOKjz33E"
+        },
+        "filterByFormula": "={ingrediente} = \"{{$json.ingrediente}}\"",
+        "returnAll": false,
+        "limit": "=",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        880,
+        -144
+      ],
+      "id": "407ec7b5-545c-4552-8061-298fae5e6cf6",
+      "name": "Buscamos ingredientes",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1vHvshdDkVqXbfCA",
+          "name": "El bueno"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ingredientesOriginales = $('Code in JavaScript').all().map(item => item.json);\n\nconst normalize = value =>\n  String(value || '')\n    .toLowerCase()\n    .trim()\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '');\n\nreturn $input.all().map(item => {\n  const stock = item.json;\n\n  const ingredienteStock = stock.Ingrediente;\n\n  const ingredienteOriginal = ingredientesOriginales.find(i =>\n    normalize(i.ingrediente) === normalize(ingredienteStock)\n  );\n\n  const stockActual = Number(stock.Cantidad || 0);\n  const consumo = Number(ingredienteOriginal?.consumo || 0);\n\n  const nuevoStock = stockActual - consumo;\n\n  return {\n    json: {\n      ...stock,\n      consumo,\n      nuevoStock\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -144
+      ],
+      "id": "64943391-41dd-476c-9673-695b41e46cd3",
+      "name": "Calculamos nuevo stock"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appoqsi86cdnaDkgz",
+          "mode": "list",
+          "cachedResultName": "Restaurant Workflow",
+          "cachedResultUrl": "https://airtable.com/appoqsi86cdnaDkgz"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblQZmq4ekOKjz33E",
+          "mode": "list",
+          "cachedResultName": "Stock",
+          "cachedResultUrl": "https://airtable.com/appoqsi86cdnaDkgz/tblQZmq4ekOKjz33E"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.id }}",
+            "Cantidad": "={{ $json.nuevoStock }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "Ingrediente",
+              "displayName": "Ingrediente",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Cantidad",
+              "displayName": "Cantidad",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1312,
+        -144
+      ],
+      "id": "437e761b-51c9-4c33-86bb-47d03fc0886f",
+      "name": "Restamos ingredientes de stock",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1vHvshdDkVqXbfCA",
+          "name": "El bueno"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appoqsi86cdnaDkgz",
+          "mode": "list",
+          "cachedResultName": "Restaurant Workflow",
+          "cachedResultUrl": "https://airtable.com/appoqsi86cdnaDkgz"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblQZmq4ekOKjz33E",
+          "mode": "list",
+          "cachedResultName": "Stock",
+          "cachedResultUrl": "https://airtable.com/appoqsi86cdnaDkgz/tblQZmq4ekOKjz33E"
+        },
+        "filterByFormula": "={Ingrediente} = \"{{$json.ingrediente}}\"",
+        "returnAll": false,
+        "limit": null,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        864,
+        320
+      ],
+      "id": "0d8766d5-709d-41d9-aed0-222cf0e30b10",
+      "name": "Buscar Inventario",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1vHvshdDkVqXbfCA",
+          "name": "El bueno"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appoqsi86cdnaDkgz",
+          "mode": "list",
+          "cachedResultName": "Restaurant Workflow",
+          "cachedResultUrl": "https://airtable.com/appoqsi86cdnaDkgz"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblag0gvbIZs9DZKI",
+          "mode": "list",
+          "cachedResultName": "Order",
+          "cachedResultUrl": "https://airtable.com/appoqsi86cdnaDkgz/tblag0gvbIZs9DZKI"
+        },
+        "filterByFormula": "={Ingrediente} = \"{{ $json.Ingrediente }}\"",
+        "returnAll": false,
+        "limit": null,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1040,
+        320
+      ],
+      "id": "f8520d28-5bd9-4ee7-9caa-3c13bc32a6ba",
+      "name": "Buscar Pedido",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1vHvshdDkVqXbfCA",
+          "name": "El bueno"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const normalize = value =>\n  String(value || '')\n    .toLowerCase()\n    .trim()\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '');\n\nconst recetaItems = $('Code in JavaScript').all().map(i => i.json);\nconst stockItems = $('Buscar Inventario').all().map(i => i.json);\nconst pedidoItems = $('Buscar Pedido').all().map(i => i.json);\n\nconst fecha = new Date();\nconst fecha_actual = fecha.toISOString().split('T')[0];\nconst mes_actual = fecha.toLocaleString('en-US', { month: 'long' });\n\nconst contexto_estacional =\n  'In spring and summer, orders for salads and fresh dishes tend to increase. In autumn and winter, hot dishes and soups are more popular.';\n\nreturn recetaItems.map(receta => {\n  const ingrediente = receta.ingrediente;\n\n  const stock = stockItems.find(s =>\n    normalize(s.Ingrediente) === normalize(ingrediente)\n  );\n\n  const pedido = pedidoItems.find(p =>\n    normalize(p.Ingrediente) === normalize(ingrediente)\n  );\n\n  const stockActual = Number(stock?.Cantidad ?? 0);\n  const pedidoPendiente = Number(pedido?.Cantidad ?? 0);\n  const ventas30d = Number(receta.ventas_30d ?? 0);\n  const consumoDiario = Number((ventas30d / 30).toFixed(2));\n\n  const diasCobertura =\n    consumoDiario > 0 ? Number((stockActual / consumoDiario).toFixed(2)) : 999;\n\n  return {\n    json: {\n      ingrediente,\n      fecha_actual,\n      mes_actual,\n      stock_actual: stockActual,\n      pedido_pendiente: pedidoPendiente,\n      buscar_pedido_id: pedido?.id ?? null,\n      consumo_30d: ventas30d,\n      consumo_diario: consumoDiario,\n      dias_cobertura: Math.max(0, diasCobertura),\n      ventas_30d: ventas30d,\n      tendencia: receta.tendencia || 'stable',\n      consumo_actual: Number(receta.consumo ?? 0),\n      contexto_estacional\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1168,
+        320
+      ],
+      "id": "705c1ed1-7267-4c9a-9dce-22516dd414b5",
+      "name": "Both"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an AI purchasing assistant for a restaurant.\n\nYour task is to calculate how many units of EACH ingredient should be added to the purchase order to ensure 30 days of stock coverage.\n\nYou will receive a list of ingredients. Each ingredient includes:\n- ingrediente\n- stock_actual\n- pedido_pendiente\n- consumo_diario\n- dias_cobertura\n- ventas_30d\n- tendencia\n- consumo_actual\n\nFor EACH ingredient, calculate the recommended order quantity using this formula:\n\nbase_target = consumo_diario * 30\n\nTrend adjustment:\n- If tendencia is \"increasing\", adjusted_target = base_target * 1.2\n- If tendencia is \"decreasing\", adjusted_target = base_target * 0.9\n- If tendencia is \"stable\", adjusted_target = base_target\n\nSafety rule:\n- If stock_actual <= 0, treat stock_actual as 0 for the calculation.\n- If dias_cobertura < 7, add an additional safety buffer of 20%.\n- If dias_cobertura < 3, add an additional safety buffer of 35%.\n\nFinal calculation:\ncantidad_a_anadir = ceil(adjusted_target_with_buffer - max(stock_actual, 0) - pedido_pendiente)\n\nIf cantidad_a_anadir is negative, return 0.\n\nIMPORTANT:\n- Do NOT return small symbolic quantities like 1 or 2 if consumption is high.\n- If consumo_diario is around 15 and stock is around 1, the output should be a large quantity close to the 30-day requirement.\n- Example: if consumo_diario = 15, stock_actual = 1 and pedido_pendiente = 0, the recommended quantity should be around 400-550 units depending on trend and buffer.\n- The result must be based on the formula, not intuition.\n\nCRITICAL RULES:\n- Return ONLY ingredients that appear in the input list.\n- Keep ingredient names EXACTLY as received in the input.\n- Do NOT translate ingredient names.\n- Do NOT invent new ingredients.\n- Always return ONLY valid JSON.\n- Do NOT wrap the JSON in markdown.\n- Do NOT include text outside the JSON.\n- \"cantidad_a_anadir\" must always be an integer >= 0.\n- If consumo_diario = 0, return cantidad_a_anadir = 0.\n\nSTRICT OUTPUT FORMAT:\n{\n  \"pedido\": [\n    {\n      \"ingrediente\": \"<exact ingredient name from input>\",\n      \"cantidad_a_anadir\": 0\n    }\n  ]\n}"
+            },
+            {
+              "content": "=Calculate the purchase order quantity for EVERY ingredient in the input list.\n\nCurrent date: {{$json.fecha_actual}}\nCurrent month: {{$json.mes_actual}}\nSeasonality context: {{$json.contexto_estacional}}\n\nInput ingredients list:\n{{$json.ingredientes}}\n\nYou MUST apply the formula from the system instructions to every ingredient.\n\nImportant:\n- Return one object in \"pedido\" for each ingredient in the input list.\n- Do not skip ingredients.\n- Do not translate ingredient names.\n- Do not invent ingredients.\n- If stock is very low and consumption is high, return a high purchase quantity.\n- Do not return symbolic quantities like 1 unless the formula really results in 1.\n\nReturn ONLY valid JSON in the required format."
+            }
+          ]
+        },
+        "simplify": false,
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        1456,
+        320
+      ],
+      "id": "4e04e8a2-4338-485c-b4a4-10d4bd1a3060",
+      "name": "Predecir pedido",
+      "credentials": {
+        "openAiApi": {
+          "id": "Wgoib3eXsaHOFd7t",
+          "name": "Cuenta GPT"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\n\nconst text = input.output?.[0]?.content?.[0]?.text;\n\nif (!text) {\n  throw new Error('No text found in AI response');\n}\n\nconst cleaned = text\n  .replace(/```json\\s*/i, '')\n  .replace(/```/g, '')\n  .trim();\n\nconst data = JSON.parse(cleaned);\n\nif (!Array.isArray(data.pedido)) {\n  throw new Error('AI response must contain pedido array');\n}\n\nconst metadataRaw = $('Preparar datos IA').first().json._metadata || '[]';\nconst metadata = typeof metadataRaw === 'string'\n  ? JSON.parse(metadataRaw)\n  : metadataRaw;\n\nconst normalize = value =>\n  String(value || '')\n    .toLowerCase()\n    .trim()\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '');\n\nreturn data.pedido.map(item => {\n  const meta = metadata.find(m =>\n    normalize(m.ingrediente) === normalize(item.ingrediente)\n  );\n\n  if (!meta?.buscar_pedido_id) {\n    throw new Error(`Missing Airtable record ID for ingredient: ${item.ingrediente}`);\n  }\n\n  const cantidadAnadir = Number(item.cantidad_a_anadir || 0);\n  const pedidoActual = Number(meta.pedido_actual || 0);\n\n  return {\n    json: {\n      ingrediente: item.ingrediente,\n      cantidad_a_anadir: cantidadAnadir,\n      buscar_pedido_id: meta.buscar_pedido_id,\n      pedido_actual: pedidoActual,\n      nueva_cantidad_pedido: pedidoActual + cantidadAnadir\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        320
+      ],
+      "id": "9da8ebb5-3cd0-4812-a135-1b251bb268ba",
+      "name": "ParseIA"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appoqsi86cdnaDkgz",
+          "mode": "list",
+          "cachedResultName": "Restaurant Workflow",
+          "cachedResultUrl": "https://airtable.com/appoqsi86cdnaDkgz"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblag0gvbIZs9DZKI",
+          "mode": "list",
+          "cachedResultName": "Order",
+          "cachedResultUrl": "https://airtable.com/appoqsi86cdnaDkgz/tblag0gvbIZs9DZKI"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Cantidad": "={{$json.nueva_cantidad_pedido}}",
+            "id": "={{$json.buscar_pedido_id}}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "Ingrediente",
+              "displayName": "Ingrediente",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Cantidad",
+              "displayName": "Cantidad",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1936,
+        320
+      ],
+      "id": "2fe4d313-33d2-460e-919b-af4cf2d5fcda",
+      "name": "Update Pedido",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1vHvshdDkVqXbfCA",
+          "name": "El bueno"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appoqsi86cdnaDkgz",
+          "mode": "list",
+          "cachedResultName": "Restaurant Workflow",
+          "cachedResultUrl": "https://airtable.com/appoqsi86cdnaDkgz"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblp4lMotoqf55mYf",
+          "mode": "list",
+          "cachedResultName": "Historic",
+          "cachedResultUrl": "https://airtable.com/appoqsi86cdnaDkgz/tblp4lMotoqf55mYf"
+        },
+        "options": {}
+      },
+      "id": "d1e2f3a4-b5c6-7890-defa-012345678901",
+      "name": "Buscar Historico Plato",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        352,
+        32
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1vHvshdDkVqXbfCA",
+          "name": "El bueno"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst receta = $('DefinirReceta').first().json;\n\nconst now = new Date();\nconst hace30dias = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);\nconst hace60dias = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);\n\nconst columnMap = {\n  'Ensalada': 'Salad',\n  'Pasta con Atun': 'Pasta with tuna'\n};\nconst columna = columnMap[receta.plato] || receta.plato;\n\nlet ventas30d = 0;\nlet ventasPrev30d = 0;\nlet totalVentas = 0;\n\nfor (const item of items) {\n  const fecha = item.json.Fecha ? new Date(item.json.Fecha) : null;\n  const cantidad = Number(item.json[columna] || 0);\n  totalVentas += cantidad;\n\n  if (fecha) {\n    if (fecha >= hace30dias) {\n      ventas30d += cantidad;\n    } else if (fecha >= hace60dias) {\n      ventasPrev30d += cantidad;\n    }\n  }\n}\n\nif (ventas30d === 0) ventas30d = totalVentas;\n\nlet tendencia = 'N/A';\nif (ventasPrev30d > 0) {\n  const ratio = ventas30d / ventasPrev30d;\n  if (ratio > 1.15) tendencia = 'increasing';\n  else if (ratio < 0.85) tendencia = 'decreasing';\n  else tendencia = 'stable';\n} else if (items.length > 0) {\n  tendencia = 'stable';\n}\n\nreturn [{\n  json: {\n    ...receta,\n    ventas_30d: ventas30d,\n    tendencia: tendencia\n  }\n}];"
+      },
+      "id": "d1e2f3a4-b5c6-7890-defa-012345678902",
+      "name": "Agregar Historico",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appoqsi86cdnaDkgz",
+          "mode": "list",
+          "cachedResultName": "Restaurant Workflow",
+          "cachedResultUrl": "https://airtable.com/appoqsi86cdnaDkgz"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblp4lMotoqf55mYf",
+          "mode": "list",
+          "cachedResultName": "Historic",
+          "cachedResultUrl": "https://airtable.com/appoqsi86cdnaDkgz/tblp4lMotoqf55mYf"
+        },
+        "filterByFormula": "IS_SAME({Fecha}, TODAY(), 'day')",
+        "returnAll": false,
+        "limit": 1,
+        "options": {}
+      },
+      "id": "6c75172a-597d-4608-9537-caf6eb9a19a9",
+      "name": "Buscar fila Historic hoy",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        160,
+        -480
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1vHvshdDkVqXbfCA",
+          "name": "El bueno"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputItems = $input.all();\nconst record = inputItems.length > 0 ? inputItems[0].json : {};\nconst body = $('Webhook').first().json.body;\nconst plato = String(body.plato || '').toLowerCase().trim();\nconst cantidad = Number(body.cantidad || 1);\nconst today = new Date().toISOString().split('T')[0];\n\nconst currentSalad = Number(record.Salad || 0);\nconst currentPasta = Number(record['Pasta with tuna'] || 0);\n\nconst result = {\n  Fecha: today,\n  Salad: plato === 'ensalada' ? currentSalad + cantidad : currentSalad,\n  'Pasta with tuna': plato === 'pasta con atun' ? currentPasta + cantidad : currentPasta\n};\n\nif (record.id) {\n  result.id = record.id;\n}\n\nreturn [{ json: result }];"
+      },
+      "id": "aedff376-cc36-4c61-9018-b9a984be9dd0",
+      "name": "Calcular Historic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        -480
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "check-row-id",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6bea0511-5867-497d-8102-67a07578dba5",
+      "name": "Fila existe",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        608,
+        -480
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appoqsi86cdnaDkgz",
+          "mode": "list",
+          "cachedResultName": "Restaurant Workflow",
+          "cachedResultUrl": "https://airtable.com/appoqsi86cdnaDkgz"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblp4lMotoqf55mYf",
+          "mode": "list",
+          "cachedResultName": "Historic",
+          "cachedResultUrl": "https://airtable.com/appoqsi86cdnaDkgz/tblp4lMotoqf55mYf"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.id }}",
+            "Salad": "={{ $json.Salad }}",
+            "Pasta with tuna": "={{ $json['Pasta with tuna'] }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "Fecha",
+              "displayName": "Fecha",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Salad",
+              "displayName": "Salad",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Pasta with tuna",
+              "displayName": "Pasta with tuna",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "1526ddee-729e-4430-afe2-4a314f7b6b5e",
+      "name": "Actualizar Historic",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        880,
+        -640
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1vHvshdDkVqXbfCA",
+          "name": "El bueno"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appoqsi86cdnaDkgz",
+          "mode": "list",
+          "cachedResultName": "Restaurant Workflow",
+          "cachedResultUrl": "https://airtable.com/appoqsi86cdnaDkgz"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblp4lMotoqf55mYf",
+          "mode": "list",
+          "cachedResultName": "Historic",
+          "cachedResultUrl": "https://airtable.com/appoqsi86cdnaDkgz/tblp4lMotoqf55mYf"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Fecha": "={{ $json.Fecha }}",
+            "Salad": "={{ $json.Salad }}",
+            "Pasta with tuna": "={{ $json['Pasta with tuna'] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Fecha",
+              "displayName": "Fecha",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Salad",
+              "displayName": "Salad",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Pasta with tuna",
+              "displayName": "Pasta with tuna",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "65cc4b7e-8b03-4e90-b818-7a85cdc73b7a",
+      "name": "Crear Historic",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        880,
+        -416
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "1vHvshdDkVqXbfCA",
+          "name": "El bueno"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst fechaActual = new Date();\nconst fecha_actual = fechaActual.toISOString().split('T')[0];\nconst mes_actual = fechaActual.toLocaleString('en-US', { month: 'long' });\n\nconst contexto_estacional =\n  'In spring and summer, orders for salads and fresh dishes tend to increase. In autumn and winter, hot dishes and soups are more popular.';\n\nconst ingredientes = items.map(item => {\n  const data = item.json;\n\n  return {\n    ingrediente: data.ingrediente,\n    stock_actual: Number(data.stock_actual ?? data.Cantidad ?? 0),\n    pedido_pendiente: Number(data.pedido_pendiente ?? data.pedido_actual ?? 0),\n    consumo_diario: Number(data.consumo_diario ?? 0),\n    dias_cobertura: Number(data.dias_cobertura ?? 0),\n    ventas_30d: Number(data.ventas_30d ?? data.consumo_30d ?? 0),\n    tendencia: data.tendencia || 'stable',\n    consumo_actual: Number(data.consumo ?? 0)\n  };\n});\n\nconst metadata = items.map(item => {\n  const data = item.json;\n\n  return {\n    ingrediente: data.ingrediente,\n    buscar_pedido_id: data.buscar_pedido_id,\n    pedido_actual: Number(data.pedido_actual ?? data.pedido_pendiente ?? 0)\n  };\n});\n\nreturn [\n  {\n    json: {\n      fecha_actual,\n      mes_actual,\n      contexto_estacional,\n      ingredientes: JSON.stringify(ingredientes),\n      _metadata: JSON.stringify(metadata)\n    }\n  }\n];"
+      },
+      "id": "4bfc5f84-c93b-4967-b5cb-e3a880ff0f39",
+      "name": "Preparar datos IA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1296,
+        320
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Buscar fila Historic hoy",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "DefinirReceta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Buscar Inventario",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Buscamos ingredientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscamos ingredientes": {
+      "main": [
+        [
+          {
+            "node": "Calculamos nuevo stock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculamos nuevo stock": {
+      "main": [
+        [
+          {
+            "node": "Restamos ingredientes de stock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Inventario": {
+      "main": [
+        [
+          {
+            "node": "Buscar Pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Pedido": {
+      "main": [
+        [
+          {
+            "node": "Both",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Predecir pedido": {
+      "main": [
+        [
+          {
+            "node": "ParseIA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ParseIA": {
+      "main": [
+        [
+          {
+            "node": "Update Pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DefinirReceta": {
+      "main": [
+        [
+          {
+            "node": "Buscar Historico Plato",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Historico Plato": {
+      "main": [
+        [
+          {
+            "node": "Agregar Historico",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agregar Historico": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar fila Historic hoy": {
+      "main": [
+        [
+          {
+            "node": "Calcular Historic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular Historic": {
+      "main": [
+        [
+          {
+            "node": "Fila existe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fila existe": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Historic",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Crear Historic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Both": {
+      "main": [
+        [
+          {
+            "node": "Preparar datos IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar datos IA": {
+      "main": [
+        [
+          {
+            "node": "Predecir pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "7887f36a-fd5c-4f47-ae0f-276af9f6c70c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5f1c0fe4aee9ab0a43ef028fbfe6cb8c522003565e3d20730048ed5b14d6d44c"
+  },
+  "id": "zXAXVVr7fN1aAI5k",
+  "tags": []
+}
